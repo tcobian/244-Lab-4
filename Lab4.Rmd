@@ -1,0 +1,139 @@
+---
+title: "lab#4"
+author: "Tyler Cobian"
+date: "1/28/2020"
+output: html_document
+---
+#### Load in the correct packages
+###### tidyverse, sf, tmap
+```{r setup, include=FALSE, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(sf)
+library(tmap)
+```
+
+#### Read in CA Eco-regions data
+```{r}
+ca_eco<- read_sf(dsn = ".", layer = "ca_eco") %>% 
+  select(US_L3NAME) %>% 
+  rename(region = US_L3NAME) %>% 
+  st_simplify(dTolerance = 100) %>% 
+  st_transform(crs = 4326)#as you increase dTolernce it will reduce the number of points that make up a polygon making it more simple
+# you can also use the ms_simplify(), geos::gSimplify
+plot(ca_eco)
+```
+
+#### Read in the CA counties polygons
+```{r}
+ca_counties<- read_sf(dsn = ".", layer = "california_county_shape_file")
+st_crs(ca_counties) = 4326
+```
+
+#### Read in CA damn locations and data
+```{r}
+ca_dams<- read_sf(dsn = ".", layer = "California_Jurisdictional_Dams")
+```
+
+#### Make a map of damns in CA overlayed in eco-regions with outlines of CA counties
+```{r}
+ggplot(ca_counties)+
+  geom_sf(color = "black",
+          size = 0.1)+
+  geom_sf(data = ca_eco,
+          aes(fill = region),
+          alpha = 0.5,
+          color = "NA",
+          show.legend = TRUE)+
+  geom_sf(data = ca_dams,
+          size = 0.5,
+          alpha = 0.5)+
+  theme_minimal()
+```
+
+#### Make the same map as above but only with Santa Barbara eco regions
+```{r}
+sb<- ca_counties %>% 
+  filter(NAME == "Santa Barbara")
+# clib the eco region data to only include the SB information with st_intersection()
+eco_clip<- st_intersection(ca_eco, sb)
+# now we will plot it with ggplot first
+ggplot()+
+  geom_sf(data = ca_counties, 
+          fill = "gray90",
+          color = "gray80",
+          size = 2)+
+  geom_sf(data = eco_clip,
+          aes(fill = region),
+          color = "white",
+          size = 0.4)+
+  coord_sf(xlim = c(-121, -119), ylim = c(33.5, 35.5))+
+  scale_fill_manual(values = c("darkgreen", "darkorange4", "cyan4"))
+
+```
+
+#### Make an interactive map with tamp
+```{r}
+sb_clip_tmap<- tm_basemap("CartoDB.DarkMatter")+
+  tm_shape(eco_clip)+
+  tm_fill("region", palette = c("darkgreen", "darkorange4", "cyan4"), alpha = 0.5)
+
+tmap_mode("view")
+sb_clip_tmap
+```
+
+#### How to make an sf object from latitude and longitude from and excel sheet
+make a mock dataset with tribble()
+```{r}
+my_example<- tribble(
+  ~id, ~lon, ~lat,
+  "tiger", -119.4, 34.35,
+  "lion", -119.41, 34.39,
+  "bear", - 119.43, 34.38
+)
+
+# conver this to an sf object
+animals_sf<- st_as_sf(my_example, coords = c("lon", "lat"), crs = 4326)
+```
+
+Make a map using tmap
+```{r}
+animal_map<- tm_basemap("CartoDB.Voyager")+
+  tm_shape(animals_sf)+
+  tm_dots(labels = "id", col = "purple", size = 0.5)
+animal_map
+```
+
+#### Make a cholorpleth of dam counts
+```{r}
+intersection<- st_intersection(x = ca_dams, y = ca_counties)
+
+dams_per_county<- intersection %>% 
+  group_by(NAME) %>% 
+  tally()
+
+ca_tot<- ca_counties %>% 
+  st_join(dams_per_county ) %>% 
+  select(NAME.x, n) %>% 
+  rename(name = NAME.x)
+
+ca_tot_zero<- ca_tot %>% 
+  replace_na(list(n = 0))
+
+# make a map with ggplot
+ggplot()+
+  geom_sf(data = ca_tot_zero,
+          aes(fill = n),
+          size = 0.2,
+          color = "white")+
+  scale_fill_continuous(low = "yellow", high = "red")
+```
+
+vinettes for sf (google sf package in github)
+
+
+
+
+
+
+
